@@ -1,0 +1,106 @@
+/* Aeon Interface Base Custom Styles */
+
+body {
+    background-color: #131313;
+    color: #e2e2e2;
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Glass panels */
+.glass-panel {
+    background: rgba(31, 31, 31, 0.2);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.floating-glass {
+    background: rgba(31, 31, 31, 0.35);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Custom Scrollbar Hiding */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+/* Material Symbols Icon Configuration */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Monochromatic Inputs & Sliders styling */
+input[type=range] {
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.12);
+    height: 4px;
+    border-radius: 2px;
+    outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px; /* strict rectangular styling, small roundedness */
+    background: #ffffff;
+    cursor: pointer;
+    transition: transform 0.15s, background-color 0.15s;
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    background-color: #e2e2e2;
+}
+
+/* Custom active borders for selected color swatches */
+.color-swatch {
+    border-radius: 2px;
+    position: relative;
+}
+
+.color-swatch.active {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+    transform: scale(1.05);
+}
+
+/* Webcam feed adjustments */
+#webcam-video {
+    display: none;
+}
+
+/* Monochromatic Button Styling */
+.btn-mono-active {
+    background-color: #ffffff !important;
+    color: #131313 !important;
+    border: 1px solid #ffffff !important;
+    transition: all 0.2s ease-in-out;
+}
+.btn-mono-active:hover {
+    background-color: #e2e2e2 !important;
+    border-color: #e2e2e2 !important;
+    color: #131313 !important;
+}
+
+.btn-mono-inactive {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #e2e2e2 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    transition: all 0.2s ease-in-out;
+}
+.btn-mono-inactive:hover {
+    background-color: #ffffff !important;
+    color: #131313 !important;
+    border-color: #ffffff !important;
+}
+

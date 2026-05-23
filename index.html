@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>AirWriter | B.Tech CSE Project</title>
+    <meta name="description" content="A futuristic augmented reality whiteboard where you can draw and write on the screen using hand tracking and calligraphic brushes.">
+    
+    <!-- TailwindCSS & Fonts CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface": "#131313",
+                        "background": "#131313",
+                        "primary": "#ffffff",
+                        "on-primary": "#131313",
+                        "secondary": "#c6c6cb",
+                        "outline": "#8e9192",
+                        "outline-variant": "#444748",
+                        "surface-container": "#1f1f1f",
+                        "surface-container-high": "#2a2a2a",
+                        "accent-glow": "rgba(255, 255, 255, 0.15)"
+                    },
+                    fontFamily: {
+                        sans: ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #131313;
+            color: #e2e2e2;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(19, 19, 19, 0.45);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .floating-glass {
+            background: rgba(19, 19, 19, 0.65);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+    
+    <!-- MediaPipe Hand Tracking CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous"></script>
+</head>
+<body class="selection:bg-primary selection:text-on-primary">
+
+    <!-- Raw Webcam Stream (Hidden from layout) -->
+    <video id="webcam-video" autoplay playsinline muted></video>
+
+    <!-- Canvas Background Viewport (Z-0) -->
+    <div id="canvas-container" class="absolute top-0 left-0 w-full h-full z-0">
+        <canvas id="paint-canvas"></canvas>
+    </div>
+
+    <!-- HUD LAYOUT OVERLAY (Z-10) -->
+    <div class="relative w-full h-screen z-10 pointer-events-none select-none flex flex-col">
+        
+        <!-- TopAppBar Header -->
+        <header class="w-full z-50 flex justify-between items-center px-8 h-20 bg-surface/10 backdrop-blur-md border-b border-white/10 shadow-sm pointer-events-auto">
+            <div class="text-2xl font-extrabold text-primary tracking-tighter cursor-pointer" onclick="switchTab('canvas')">
+                AirWriter
+            </div>
+            <nav class="flex items-center space-x-8">
+                <button id="tab-canvas" class="text-primary border-b-2 border-primary pb-1 font-semibold text-sm cursor-pointer transition-all active:scale-95" onclick="switchTab('canvas')">Canvas</button>
+                <button id="tab-setup" class="text-outline hover:text-primary font-semibold text-sm cursor-pointer transition-all active:scale-95" onclick="switchTab('setup')">Setup</button>
+                <button id="tab-settings" class="text-outline hover:text-primary font-semibold text-sm cursor-pointer transition-all active:scale-95" onclick="switchTab('settings')">Settings</button>
+            </nav>
+            <div class="flex items-center">
+                <span class="material-symbols-outlined text-primary cursor-pointer hover:bg-white/10 p-2 rounded-full transition-all active:scale-95">account_circle</span>
+            </div>
+        </header>
+
+        <!-- Sidebar Navigation Drawer (Left) -->
+        <aside id="sidebar-panel" class="fixed left-0 top-20 w-64 h-[calc(100vh-80px)] bg-surface/20 backdrop-blur-xl border-r border-white/10 p-6 flex flex-col gap-6 shadow-2xl z-40 pointer-events-auto">
+            <!-- Operator Card -->
+            <div class="border border-white/10 bg-white/5 p-4 rounded">
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-primary text-sm">person</span>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-primary">AirWriter System</div>
+                        <div class="text-[10px] text-outline">Project Demo Mode</div>
+                    </div>
+                </div>
+                <div class="text-[10px] text-outline flex justify-between border-t border-white/5 pt-2 mt-2">
+                    <span>Gesture Status:</span>
+                    <strong id="current-gesture-label" class="text-white">NO HAND</strong>
+                </div>
+                <div class="text-[10px] text-outline flex justify-between mt-1">
+                    <span>FPS Rate:</span>
+                    <span><span id="tracking-fps">0</span> FPS</span>
+                </div>
+            </div>
+
+            <!-- Controls scroll view -->
+            <div class="flex-1 overflow-y-auto space-y-5 pr-1 scrollbar-hide">
+                
+                <!-- Tool Selectors -->
+                <div class="flex flex-col gap-2">
+                    <span class="text-[10px] font-bold text-outline uppercase tracking-wider">Active Tool</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="tool-brush" class="py-2 text-xs font-bold rounded btn-mono-active active:scale-95" onclick="setTool(false)">Brush</button>
+                        <button id="tool-eraser" class="py-2 text-xs font-bold rounded btn-mono-inactive active:scale-95" onclick="setTool(true)">Eraser</button>
+                    </div>
+                </div>
+
+                <!-- Ink Color Picker -->
+                <div class="flex flex-col gap-2">
+                    <span class="text-[10px] font-bold text-outline uppercase tracking-wider">Calligraphy Ink</span>
+                    <div class="grid grid-cols-6 gap-1 mt-1">
+                        <button class="color-swatch active w-7 h-7 bg-[#ffffff] border border-white/20 rounded-sm cursor-pointer transition-transform hover:scale-110" onclick="setBrushColor('#ffffff', this)"></button>
+                        <button class="color-swatch w-7 h-7 bg-[#00f0ff] border border-white/20 rounded-sm cursor-pointer transition-transform hover:scale-110" onclick="setBrushColor('#00f0ff', this)"></button>
+                        <button class="color-swatch w-7 h-7 bg-[#ff007f] border border-white/20 rounded-sm cursor-pointer transition-transform hover:scale-110" onclick="setBrushColor('#ff007f', this)"></button>
+                        <button class="color-swatch w-7 h-7 bg-[#39ff14] border border-white/20 rounded-sm cursor-pointer transition-transform hover:scale-110" onclick="setBrushColor('#39ff14', this)"></button>
+                        <button class="color-swatch w-7 h-7 bg-[#fff000] border border-white/20 rounded-sm cursor-pointer transition-transform hover:scale-110" onclick="setBrushColor('#fff000', this)"></button>
+                        <button class="color-swatch w-7 h-7 bg-[#b026ff] border border-white/20 rounded-sm cursor-pointer transition-transform hover:scale-110" onclick="setBrushColor('#b026ff', this)"></button>
+                    </div>
+                </div>
+
+                <!-- Sliders -->
+                <div class="flex flex-col gap-3">
+                    <!-- Brush Size -->
+                    <div class="flex flex-col gap-1.5">
+                        <div class="flex justify-between text-[10px] font-bold text-outline uppercase tracking-wider">
+                            <span>Brush Size</span>
+                            <span id="size-val" class="text-primary font-mono">8px</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="range" id="size-slider" min="2" max="60" value="8" class="w-full accent-white bg-white/10 h-1 rounded outline-none" oninput="setBrushSize(this.value)">
+                        </div>
+                    </div>
+
+                    <!-- Easing Smoothing -->
+                    <div class="flex flex-col gap-1.5">
+                        <div class="flex justify-between text-[10px] font-bold text-outline uppercase tracking-wider">
+                            <span>Brush Smoothing</span>
+                            <span id="smoothing-val" class="text-primary font-mono">78%</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="range" id="smoothing-slider" min="1" max="98" value="78" class="w-full accent-white bg-white/10 h-1 rounded outline-none" oninput="setSmoothing(this.value)">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Camera Widget Card -->
+                <div class="flex flex-col gap-2">
+                    <span class="text-[10px] font-bold text-outline uppercase tracking-wider">Webcam Feedback</span>
+                    <div id="webcam-panel" class="relative w-full aspect-[4/3] rounded border border-white/10 bg-black/40 overflow-hidden flex flex-col justify-center items-center">
+                        <div id="camera-placeholder-ui" class="p-3 text-center flex flex-col items-center gap-2">
+                            <span class="material-symbols-outlined text-outline text-2xl">photo_camera</span>
+                            <p class="text-[10px] text-outline">Camera feed starts automatically</p>
+                        </div>
+                        <div id="webcam-preview-container" class="w-full h-full hidden">
+                            <canvas id="webcam-canvas" class="w-full h-full object-cover"></canvas>
+                        </div>
+                    </div>
+                    <div class="text-[9px] text-outline flex justify-between items-center mt-1">
+                        <span>Connection Status:</span>
+                        <strong id="tracking-status-text" class="text-outline uppercase">Inactive</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Operations Actions -->
+            <div class="flex flex-col gap-2 border-t border-white/10 pt-4 mt-auto">
+                <button class="font-bold text-xs py-3 rounded btn-mono-inactive active:scale-95 w-full cursor-pointer" onclick="triggerSave()">
+                    Export Drawing
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN ACTIVE DISPLAY PANE (Z-20) -->
+        <main class="flex-1 pt-24 lg:ml-64 px-8 pb-12 overflow-y-auto pointer-events-auto">
+            
+            <!-- PANELS CONTENT -->
+            <!-- Removed pane-projects block to keep the UI minimal -->
+
+            <!-- 2. SETUP TAB (Calibrations) -->
+            <div id="pane-setup" class="hidden max-w-xl mx-auto">
+                <div class="glass-panel p-6 rounded flex flex-col gap-6">
+                    <header class="border-b border-white/10 pb-4">
+                        <h2 class="text-xl font-bold text-primary">Spatial Sensor Setup</h2>
+                        <p class="text-xs text-outline">Configure hand parameters and webcam tracking settings.</p>
+                    </header>
+                    
+                    <!-- Control Mode Settings -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-xs font-semibold text-outline">Gesture Control Mode</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="setup-mode-point" class="py-2.5 text-xs font-bold rounded btn-mono-active active:scale-95 cursor-pointer" onclick="setControlMode('point')">Point Write</button>
+                            <button id="setup-mode-pinch" class="py-2.5 text-xs font-bold rounded btn-mono-inactive active:scale-95 cursor-pointer" onclick="setControlMode('pinch')">Pinch Write</button>
+                        </div>
+                        <p class="text-[10px] text-outline mt-1 leading-relaxed">
+                            <strong>Point Write</strong>: Draw by raising your index finger (other fingers folded). Flat hand hovers. <br>
+                            <strong>Pinch Write</strong>: Draw by pinching index and thumb. Open fingers hover.
+                        </p>
+                    </div>
+
+                    <!-- Removed telemetry block to keep setup page minimal -->
+                </div>
+            </div>
+
+            <!-- 3. PREFERENCES TAB (Settings) -->
+            <div id="pane-settings" class="hidden max-w-xl mx-auto">
+                <div class="glass-panel p-6 rounded flex flex-col gap-6">
+                    <header class="border-b border-white/10 pb-4">
+                        <h2 class="text-xl font-bold text-primary">System Preferences</h2>
+                        <p class="text-xs text-outline">Manage sound parameters and HUD visual feedback styles.</p>
+                    </header>
+
+                    <!-- Background settings -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-xs font-semibold text-outline">Workspace Background</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="setup-bg-full" class="py-2.5 text-xs font-bold rounded btn-mono-active active:scale-95 cursor-pointer" onclick="setBackgroundMode('full')">Augmented Mirror</button>
+                            <button id="setup-bg-dark" class="py-2.5 text-xs font-bold rounded btn-mono-inactive active:scale-95 cursor-pointer" onclick="setBackgroundMode('dark')">Dark space</button>
+                        </div>
+                    </div>
+
+                    <!-- Audio settings -->
+                    <div class="flex justify-between items-center border-t border-white/5 pt-4">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-semibold text-outline">Audio Synthesizer</span>
+                            <span class="text-[10px] text-outline">Feedback tone sweep while drawing.</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setup-audio-toggle" checked class="sr-only peer" onchange="toggleAudio()">
+                            <div class="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer Credits -->
+        <footer class="fixed bottom-0 left-0 w-full px-8 py-4 opacity-40 bg-transparent text-[10px] pointer-events-none select-none z-30">
+            <div>AirWriter Project | B.Tech CSE 2026</div>
+        </footer>
+    </div>
+
+    <!-- Tutorial Start overlay card (Full-screen Glass overlay) -->
+    <div id="startup-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex justify-center items-center p-6 transition-all duration-300">
+        <div class="floating-glass max-w-md w-full p-8 rounded flex flex-col gap-6 shadow-2xl">
+            <header>
+                <h2 class="text-2xl font-extrabold text-primary tracking-tight">AirWriter Project</h2>
+                <p class="text-xs text-outline mt-1">B.Tech CSE Capstone Project - Hand Gesture Writing System</p>
+            </header>
+            <p class="text-xs text-outline leading-relaxed">
+                Write or paint in mid-air using your webcam. Please follow the gesture constraints:
+            </p>
+            <ul class="text-xs text-outline space-y-2.5 list-decimal pl-4 text-justify">
+                <li><strong>Point Write</strong>: Draw by pointing your index finger (fold other fingers). Flat palm hovers.</li>
+                <li><strong>Pinch Write</strong>: Draw by pinching your index and thumb (holding virtual pen). Release to hover.</li>
+                <li><strong>Air Buttons</strong>: Hover your cursor over the CLEAR, ERASER, UNDO, SAVE buttons at the top of the canvas for 1.2 seconds to trigger them.</li>
+            </ul>
+            <button id="start-overlay-btn" class="font-bold text-xs py-3.5 rounded btn-mono-inactive active:scale-95 w-full cursor-pointer mt-2">
+                Enable Camera & Start
+            </button>
+        </div>
+    </div>
+
+    <!-- UI Interaction Scripts -->
+    <script>
+        let activeTab = 'canvas';
+
+        function switchTab(tabId) {
+            window.writerAudio.playClick();
+            
+            // Tab Buttons UI
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.className = "text-outline hover:text-primary font-semibold text-sm cursor-pointer transition-all active:scale-95";
+            });
+            const activeBtn = document.getElementById('tab-' + tabId);
+            if (activeBtn) {
+                activeBtn.className = "text-primary border-b-2 border-primary pb-1 font-semibold text-sm cursor-pointer transition-all active:scale-95";
+            }
+
+            // Screen Panes toggling
+            document.getElementById('pane-setup').classList.add('hidden');
+            document.getElementById('pane-settings').classList.add('hidden');
+            
+            // Sidebar adjustments: Hide drawing control panels when not viewing canvas
+            const sidebar = document.getElementById('sidebar-panel');
+
+            if (tabId === 'canvas') {
+                sidebar.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('hidden');
+                
+                if (tabId === 'setup') {
+                    document.getElementById('pane-setup').classList.remove('hidden');
+                } else if (tabId === 'settings') {
+                    document.getElementById('pane-settings').classList.remove('hidden');
+                }
+            }
+
+            activeTab = tabId;
+        }
+
+        // Global function to keep button states in sync with CONFIG.isEraser
+        window.updateToolUI = function() {
+            const brushBtn = document.getElementById('tool-brush');
+            const eraserBtn = document.getElementById('tool-eraser');
+            if (brushBtn && eraserBtn) {
+                if (CONFIG.isEraser) {
+                    eraserBtn.className = "py-2 text-xs font-bold rounded btn-mono-active active:scale-95";
+                    brushBtn.className = "py-2 text-xs font-bold rounded btn-mono-inactive active:scale-95";
+                } else {
+                    brushBtn.className = "py-2 text-xs font-bold rounded btn-mono-active active:scale-95";
+                    eraserBtn.className = "py-2 text-xs font-bold rounded btn-mono-inactive active:scale-95";
+                }
+            }
+        };
+
+        function setControlMode(mode) {
+            window.writerAudio.playClick();
+            CONFIG.controlMode = mode;
+            
+            // Setup page buttons
+            const setupPoint = document.getElementById('setup-mode-point');
+            const setupPinch = document.getElementById('setup-mode-pinch');
+            if (setupPoint && setupPinch) {
+                setupPoint.className = mode === 'point' 
+                    ? "py-2.5 text-xs font-bold rounded btn-mono-active active:scale-95 cursor-pointer"
+                    : "py-2.5 text-xs font-bold rounded btn-mono-inactive active:scale-95 cursor-pointer";
+                setupPinch.className = mode === 'pinch'
+                    ? "py-2.5 text-xs font-bold rounded btn-mono-active active:scale-95 cursor-pointer"
+                    : "py-2.5 text-xs font-bold rounded btn-mono-inactive active:scale-95 cursor-pointer";
+            }
+        }
+
+        function setBrushColor(color, element) {
+            window.writerAudio.playClick();
+            CONFIG.brushColor = color;
+            CONFIG.isEraser = false; // Turn off eraser when color selected
+            
+            window.updateToolUI();
+
+            document.querySelectorAll('.color-swatch').forEach(swatch => swatch.classList.remove('scale-110', 'border-white', 'shadow-lg'));
+            element.classList.add('scale-110', 'border-white', 'shadow-lg');
+        }
+
+        function setBrushSize(size) {
+            CONFIG.brushSize = parseInt(size);
+            document.getElementById('size-val').innerText = size + 'px';
+            document.getElementById('size-slider').value = size;
+        }
+
+        function setSmoothing(value) {
+            // Easing lerp map
+            CONFIG.smoothing = (100 - value) / 100;
+            document.getElementById('smoothing-val').innerText = value + '%';
+            document.getElementById('smoothing-slider').value = value;
+        }
+
+        function setTool(isEraser) {
+            window.writerAudio.playClick();
+            CONFIG.isEraser = isEraser;
+            window.updateToolUI();
+        }
+
+        function setBackgroundMode(bgMode) {
+            window.writerAudio.playClick();
+            CONFIG.backgroundMode = bgMode;
+            
+            // Settings page buttons
+            const setupFull = document.getElementById('setup-bg-full');
+            const setupDark = document.getElementById('setup-bg-dark');
+            if (setupFull && setupDark) {
+                setupFull.className = bgMode === 'full' 
+                    ? "py-2.5 text-xs font-bold rounded btn-mono-active active:scale-95 cursor-pointer"
+                    : "py-2.5 text-xs font-bold rounded btn-mono-inactive active:scale-95 cursor-pointer";
+                setupDark.className = bgMode === 'dark'
+                    ? "py-2.5 text-xs font-bold rounded btn-mono-active active:scale-95 cursor-pointer"
+                    : "py-2.5 text-xs font-bold rounded btn-mono-inactive active:scale-95 cursor-pointer";
+            }
+        }
+
+        function toggleAudio() {
+            const isMuted = window.writerAudio.toggleMute();
+            const setupAudio = document.getElementById('setup-audio-toggle');
+            if (setupAudio) {
+                setupAudio.checked = !isMuted;
+            }
+        }
+
+        // Bridge functions back to modules
+        function triggerUndo() {
+            if (typeof undoLastStroke === 'function') {
+                undoLastStroke();
+            }
+        }
+
+        function triggerClear() {
+            if (typeof clearDrawing === 'function') {
+                clearDrawing();
+            }
+        }
+
+        function triggerSave() {
+            if (typeof saveDrawing === 'function') {
+                saveDrawing();
+            }
+        }
+    </script>
+    
+    <!-- Custom Modules -->
+    <script src="audio.js"></script>
+    <script src="writer.js"></script>
+    <script src="hand-tracker.js"></script>
+</body>
+</html>
