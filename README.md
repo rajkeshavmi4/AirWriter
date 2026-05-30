@@ -43,6 +43,7 @@ Running the project is super easy:
 5. Grant camera permission, click **Enable Camera & Start**, and start drawing!
 
 ---
-
+<img width="1919" height="869" alt="image" src="https://github.com/user-attachments/assets/bf88338c-bc33-4fa8-98b3-ea9de3dfcd60" />
+---
 Made By - Keshav Raj
 DTU'29
