@@ -2,8 +2,6 @@
 
 Hey there! Welcome to AirWriter, a cool spatial drawing project that lets you write and paint in mid-air using just your webcam and hand gestures. 
 
-This is a B.Tech Computer Science project built to explore real-time computer vision and interactive canvas rendering right in the browser.
-
 ## What is it?
 
 AirWriter uses your computer webcam to track your hand gestures in real time. By moving your hand in front of the camera, you can draw calligraphy strokes on the screen, erase lines, change colors, and save your work as a PNG image. There are no corporate widgets, no clutter, and no complex settings, just a clean canvas and simple controls.
